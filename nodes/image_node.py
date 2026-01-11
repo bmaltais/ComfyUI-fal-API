@@ -1,3 +1,4 @@
+import folder_paths
 from .fal_utils import ApiHandler, ImageUtils, ResultProcessor
 
 
