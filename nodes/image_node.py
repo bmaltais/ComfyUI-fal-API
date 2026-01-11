@@ -1,4 +1,3 @@
-import folder_paths
 from .fal_utils import ApiHandler, ImageUtils, ResultProcessor
 
 
@@ -2345,6 +2344,7 @@ class GPTImage15:
 class FluxKontextLora:
     @classmethod
     def INPUT_TYPES(cls):
+        lora_names = ["None"] + folder_paths.get_filename_list("loras")
         return {
             'required': {
                 'prompt': ('STRING', {'default': '', 'multiline': True}),
