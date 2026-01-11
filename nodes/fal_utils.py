@@ -4,6 +4,8 @@ import os
 import tempfile
 import asyncio
 import concurrent.futures
+import hashlib
+import json
 
 import numpy as np
 import requests
@@ -69,6 +71,31 @@ class FalConfig:
 
 class ImageUtils:
     """Utility functions for image processing."""
+    _file_upload_cache = {}
+    _cache_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "upload_cache.json")
+    _cache_loaded = False
+
+    @staticmethod
+    def _load_cache():
+        if ImageUtils._cache_loaded:
+            return
+
+        if os.path.exists(ImageUtils._cache_file_path):
+            try:
+                with open(ImageUtils._cache_file_path, 'r') as f:
+                    ImageUtils._file_upload_cache = json.load(f)
+            except (IOError, json.JSONDecodeError):
+                ImageUtils._file_upload_cache = {}
+
+        ImageUtils._cache_loaded = True
+
+    @staticmethod
+    def _save_cache():
+        try:
+            with open(ImageUtils._cache_file_path, 'w') as f:
+                json.dump(ImageUtils._file_upload_cache, f, indent=4)
+        except IOError:
+            print("Warning: Could not write to upload cache file.")
 
     @staticmethod
     def tensor_to_pil(image):
@@ -113,9 +140,8 @@ class ImageUtils:
                 pil_image.save(temp_file, format="PNG")
                 temp_file_path = temp_file.name
 
-            # Upload the temporary file
-            client = FalConfig().get_client()
-            image_url = client.upload_file(temp_file_path)
+            # Upload the temporary file using the caching mechanism
+            image_url = ImageUtils.upload_file(temp_file_path)
             return image_url
         except Exception as e:
             print(f"Error uploading image: {str(e)}")
@@ -127,10 +153,21 @@ class ImageUtils:
                 
     @staticmethod
     def upload_file(file_path):
-        """Upload a file to FAL and return URL."""
+        """Upload a file to FAL and return URL, with caching."""
+        ImageUtils._load_cache()
+
         try:
+            with open(file_path, "rb") as f:
+                file_hash = hashlib.sha256(f.read()).hexdigest()
+
+            if file_hash in ImageUtils._file_upload_cache:
+                return ImageUtils._file_upload_cache[file_hash]
+
             client = FalConfig().get_client()
             file_url = client.upload_file(file_path)
+
+            ImageUtils._file_upload_cache[file_hash] = file_url
+            ImageUtils._save_cache()
             return file_url
         except Exception as e:
             print(f"Error uploading file: {str(e)}")
