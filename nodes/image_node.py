@@ -2345,8 +2345,6 @@ class GPTImage15:
 class FluxKontextLora:
     @classmethod
     def INPUT_TYPES(cls):
-        lora_names = ["None"] + folder_paths.get_filename_list("loras")
-
         return {
             'required': {
                 'prompt': ('STRING', {'default': '', 'multiline': True}),
@@ -2379,9 +2377,9 @@ class FluxKontextLora:
             'optional': {
                 'seed': ('INT', {'default': -1}),
                 'sync_mode': ('BOOLEAN', {'default': False}),
-                'lora_1': (lora_names,),
+                'lora_1_path_or_url': ('STRING', {'default': ''}),
                 'lora_1_strength': ('FLOAT', {'default': 1.0, 'min': -1.0, 'max': 2.0, 'step': 0.01}),
-                'lora_2': (lora_names,),
+                'lora_2_path_or_url': ('STRING', {'default': ''}),
                 'lora_2_strength': ('FLOAT', {'default': 1.0, 'min': -1.0, 'max': 2.0, 'step': 0.01}),
             },
         }
@@ -2403,9 +2401,9 @@ class FluxKontextLora:
         resolution_mode,
         seed=-1,
         sync_mode=False,
-        lora_1="None",
+        lora_1_path_or_url="",
         lora_1_strength=1.0,
-        lora_2="None",
+        lora_2_path_or_url="",
         lora_2_strength=1.0,
     ):
         model_name = 'Flux Kontext Lora'
@@ -2431,15 +2429,11 @@ class FluxKontextLora:
             arguments['seed'] = seed
 
         loras = []
-        if lora_1 != "None":
-            lora_path = folder_paths.get_full_path("loras", lora_1)
-            lora_url = ImageUtils.upload_file(lora_path)
-            loras.append({"path": lora_url, "scale": lora_1_strength})
+        if lora_1_path_or_url:
+            loras.append({"path": lora_1_path_or_url, "scale": lora_1_strength})
 
-        if lora_2 != "None":
-            lora_path = folder_paths.get_full_path("loras", lora_2)
-            lora_url = ImageUtils.upload_file(lora_path)
-            loras.append({"path": lora_url, "scale": lora_2_strength})
+        if lora_2_path_or_url:
+            loras.append({"path": lora_2_path_or_url, "scale": lora_2_strength})
 
         if loras:
             arguments["loras"] = loras
