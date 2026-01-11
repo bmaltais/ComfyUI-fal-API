@@ -4,6 +4,7 @@ import os
 import tempfile
 import asyncio
 import concurrent.futures
+import hashlib
 
 import numpy as np
 import requests
@@ -69,6 +70,7 @@ class FalConfig:
 
 class ImageUtils:
     """Utility functions for image processing."""
+    _file_upload_cache = {}
 
     @staticmethod
     def tensor_to_pil(image):
@@ -113,9 +115,8 @@ class ImageUtils:
                 pil_image.save(temp_file, format="PNG")
                 temp_file_path = temp_file.name
 
-            # Upload the temporary file
-            client = FalConfig().get_client()
-            image_url = client.upload_file(temp_file_path)
+            # Upload the temporary file using the caching mechanism
+            image_url = ImageUtils.upload_file(temp_file_path)
             return image_url
         except Exception as e:
             print(f"Error uploading image: {str(e)}")
@@ -127,10 +128,18 @@ class ImageUtils:
                 
     @staticmethod
     def upload_file(file_path):
-        """Upload a file to FAL and return URL."""
+        """Upload a file to FAL and return URL, with caching."""
         try:
+            with open(file_path, "rb") as f:
+                file_hash = hashlib.sha256(f.read()).hexdigest()
+
+            if file_hash in ImageUtils._file_upload_cache:
+                return ImageUtils._file_upload_cache[file_hash]
+
             client = FalConfig().get_client()
             file_url = client.upload_file(file_path)
+
+            ImageUtils._file_upload_cache[file_hash] = file_url
             return file_url
         except Exception as e:
             print(f"Error uploading file: {str(e)}")
