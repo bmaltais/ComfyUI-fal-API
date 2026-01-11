@@ -1,3 +1,4 @@
+import folder_paths
 from .fal_utils import ApiHandler, ImageUtils, ResultProcessor
 
 
@@ -2341,8 +2342,127 @@ class GPTImage15:
             return ApiHandler.handle_image_generation_error("GPT-Image 1.5", e)
 
 
+class FluxKontextLora:
+    @classmethod
+    def INPUT_TYPES(cls):
+        lora_names = ["None"] + folder_paths.get_filename_list("loras")
+        return {
+            'required': {
+                'prompt': ('STRING', {'default': '', 'multiline': True}),
+                'image': ('IMAGE',),
+                'num_inference_steps': ('INT', {'default': 30, 'min': 1, 'max': 100}),
+                'guidance_scale': ('FLOAT', {'default': 2.5, 'min': 0.0, 'max': 20.0, 'step': 0.1}),
+                'num_images': ('INT', {'default': 1, 'min': 1, 'max': 4}),
+                'enable_safety_checker': ('BOOLEAN', {'default': True}),
+                'output_format': (['png', 'jpeg'], {'default': 'png'}),
+                'acceleration': (['none', 'regular', 'high'], {'default': 'none'}),
+                'resolution_mode': (
+                    [
+                        'auto',
+                        'match_input',
+                        '1:1',
+                        '16:9',
+                        '21:9',
+                        '3:2',
+                        '2:3',
+                        '4:5',
+                        '5:4',
+                        '3:4',
+                        '4:3',
+                        '9:16',
+                        '9:21',
+                    ],
+                    {'default': 'match_input'},
+                ),
+            },
+            'optional': {
+                'seed': ('INT', {'default': -1}),
+                'sync_mode': ('BOOLEAN', {'default': False}),
+                'lora_1': (lora_names,),
+                'lora_1_strength': ('FLOAT', {'default': 1.0, 'min': -1.0, 'max': 2.0, 'step': 0.01}),
+                'lora_2': (lora_names,),
+                'lora_2_strength': ('FLOAT', {'default': 1.0, 'min': -1.0, 'max': 2.0, 'step': 0.01}),
+                'lora_1_path_or_url': ('STRING', {'default': ''}),
+                'lora_2_path_or_url': ('STRING', {'default': ''}),
+            },
+        }
+
+    RETURN_TYPES = ('IMAGE',)
+    FUNCTION = 'generate_image'
+    CATEGORY = 'FAL/Image'
+
+    def generate_image(
+        self,
+        prompt,
+        image,
+        num_inference_steps,
+        guidance_scale,
+        num_images,
+        enable_safety_checker,
+        output_format,
+        acceleration,
+        resolution_mode,
+        seed=-1,
+        sync_mode=False,
+        lora_1="None",
+        lora_1_strength=1.0,
+        lora_2="None",
+        lora_2_strength=1.0,
+        lora_1_path_or_url="",
+        lora_2_path_or_url="",
+    ):
+        model_name = 'Flux Kontext Lora'
+        image_url = ImageUtils.upload_image(image)
+        if not image_url:
+            print(f'Error: Failed to upload image for {model_name}')
+            return ResultProcessor.create_blank_image()
+
+        arguments = {
+            'prompt': prompt,
+            'image_url': image_url,
+            'num_inference_steps': num_inference_steps,
+            'guidance_scale': guidance_scale,
+            'num_images': num_images,
+            'enable_safety_checker': enable_safety_checker,
+            'output_format': output_format,
+            'acceleration': acceleration,
+            'resolution_mode': resolution_mode,
+            'sync_mode': sync_mode,
+        }
+
+        if seed != -1:
+            arguments['seed'] = seed
+
+        loras = []
+        if lora_1_path_or_url:
+            loras.append({"path": lora_1_path_or_url, "scale": lora_1_strength})
+        elif lora_1 != "None":
+            lora_path = folder_paths.get_full_path("loras", lora_1)
+            lora_url = ImageUtils.upload_file(lora_path)
+            loras.append({"path": lora_url, "scale": lora_1_strength})
+
+        if lora_2_path_or_url:
+            loras.append({"path": lora_2_path_or_url, "scale": lora_2_strength})
+        elif lora_2 != "None":
+            lora_path = folder_paths.get_full_path("loras", lora_2)
+            lora_url = ImageUtils.upload_file(lora_path)
+            loras.append({"path": lora_url, "scale": lora_2_strength})
+
+        if loras:
+            arguments["loras"] = loras
+
+        try:
+            result = ApiHandler.submit_and_get_result(
+                'fal-ai/flux-kontext-lora', arguments
+            )
+            return ResultProcessor.process_image_result(result)
+        except Exception as e:
+            return ApiHandler.handle_image_generation_error(model_name, e)
+
+
 # Node class mappings
 NODE_CLASS_MAPPINGS = {
+    "FluxKontextLora_fal": FluxKontextLora,
     "Ideogramv3_fal": Ideogramv3,
     "Hidreamfull_fal": HidreamFull,
     "FluxPro_fal": FluxPro,
@@ -2376,6 +2496,7 @@ NODE_CLASS_MAPPINGS = {
 
 # Display name mappings
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "FluxKontextLora_fal": "Flux Kontext Lora (fal)",
     "Ideogramv3_fal": "Ideogramv3 (fal)",
     "Hidreamfull_fal": "HidreamFull (fal)",
     "FluxPro_fal": "Flux Pro (fal)",
