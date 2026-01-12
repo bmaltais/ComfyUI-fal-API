@@ -2461,7 +2461,233 @@ class FluxKontextLora:
 
 
 # Node class mappings
+class Flux2Edit:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "prompt": ("STRING", {"default": "", "multiline": "true"}),
+                "image": ("IMAGE",),
+            },
+            "optional": {
+                "guidance_scale": ("FLOAT", {"default": 2.5, "min": 0.0, "max": 10.0, "step": 0.1}),
+                "seed": ("INT", {"default": -1}),
+                "num_inference_steps": ("INT", {"default": 28, "min": 1, "max": 100}),
+                "image_size": (
+                    [
+                        "square_hd",
+                        "square",
+                        "portrait_4_3",
+                        "portrait_16_9",
+                        "landscape_4_3",
+                        "landscape_16_9",
+                        "custom",
+                    ],
+                    {"default": "square_hd"},
+                ),
+                "width": (
+                    "INT",
+                    {"default": 1024, "min": 512, "max": 2048, "step": 16},
+                ),
+                "height": (
+                    "INT",
+                    {"default": 1024, "min": 512, "max": 2048, "step": 16},
+                ),
+                "num_images": ("INT", {"default": 1, "min": 1, "max": 4}),
+                "acceleration": (["none", "regular", "high"], {"default": "regular"}),
+                "enable_prompt_expansion": ("BOOLEAN", {"default": False}),
+                "sync_mode": ("BOOLEAN", {"default": False}),
+                "enable_safety_checker": ("BOOLEAN", {"default": True}),
+                "output_format": (["png", "jpeg", "webp"], {"default": "png"}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "edit_image"
+    CATEGORY = "FAL/Image"
+
+    def edit_image(
+        self,
+        prompt,
+        image,
+        guidance_scale=2.5,
+        seed=-1,
+        num_inference_steps=28,
+        image_size="square_hd",
+        width=1024,
+        height=1024,
+        num_images=1,
+        acceleration="regular",
+        enable_prompt_expansion=False,
+        sync_mode=False,
+        enable_safety_checker=True,
+        output_format="png",
+    ):
+        image_urls = ImageUtils.prepare_images(image)
+        if not image_urls:
+            return ApiHandler.handle_image_generation_error(
+                "Flux2Edit", "No image provided."
+            )
+
+        arguments = {
+            "prompt": prompt,
+            "image_urls": image_urls,
+            "guidance_scale": guidance_scale,
+            "num_inference_steps": num_inference_steps,
+            "num_images": num_images,
+            "acceleration": acceleration,
+            "enable_prompt_expansion": enable_prompt_expansion,
+            "sync_mode": sync_mode,
+            "enable_safety_checker": enable_safety_checker,
+            "output_format": output_format,
+        }
+
+        if image_size == "custom":
+            arguments["image_size"] = {"width": width, "height": height}
+        else:
+            arguments["image_size"] = image_size
+
+        if seed != -1:
+            arguments["seed"] = seed
+
+        try:
+            result = ApiHandler.submit_and_get_result("fal-ai/flux-2/edit", arguments)
+            return ResultProcessor.process_image_result(result)
+        except Exception as e:
+            return ApiHandler.handle_image_generation_error("Flux2Edit", e)
+
+
+class Flux2FlashEdit:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "prompt": ("STRING", {"default": "", "multiline": "true"}),
+                "image": ("IMAGE",),
+            },
+            "optional": {
+                "guidance_scale": ("FLOAT", {"default": 2.5, "min": 0.0, "max": 10.0, "step": 0.1}),
+                "seed": ("INT", {"default": -1}),
+                "image_size": (
+                    [
+                        "square_hd",
+                        "square",
+                        "portrait_4_3",
+                        "portrait_16_9",
+                        "landscape_4_3",
+                        "landscape_16_9",
+                        "custom",
+                    ],
+                    {"default": "square_hd"},
+                ),
+                "width": (
+                    "INT",
+                    {"default": 1024, "min": 512, "max": 2048, "step": 16},
+                ),
+                "height": (
+                    "INT",
+                    {"default": 1024, "min": 512, "max": 2048, "step": 16},
+                ),
+                "num_images": ("INT", {"default": 1, "min": 1, "max": 4}),
+                "enable_prompt_expansion": ("BOOLEAN", {"default": False}),
+                "sync_mode": ("BOOLEAN", {"default": False}),
+                "enable_safety_checker": ("BOOLEAN", {"default": True}),
+                "output_format": (["png", "jpeg", "webp"], {"default": "png"}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "edit_image"
+    CATEGORY = "FAL/Image"
+
+    def edit_image(
+        self,
+        prompt,
+        image,
+        guidance_scale=2.5,
+        seed=-1,
+        image_size="square_hd",
+        width=1024,
+        height=1024,
+        num_images=1,
+        enable_prompt_expansion=False,
+        sync_mode=False,
+        enable_safety_checker=True,
+        output_format="png",
+    ):
+        image_urls = ImageUtils.prepare_images(image)
+        if not image_urls:
+            return ApiHandler.handle_image_generation_error(
+                "Flux2FlashEdit", "No image provided."
+            )
+
+        arguments = {
+            "prompt": prompt,
+            "image_urls": image_urls,
+            "guidance_scale": guidance_scale,
+            "num_images": num_images,
+            "enable_prompt_expansion": enable_prompt_expansion,
+            "sync_mode": sync_mode,
+            "enable_safety_checker": enable_safety_checker,
+            "output_format": output_format,
+        }
+
+        if image_size == "custom":
+            arguments["image_size"] = {"width": width, "height": height}
+        else:
+            arguments["image_size"] = image_size
+
+        if seed != -1:
+            arguments["seed"] = seed
+
+        try:
+            result = ApiHandler.submit_and_get_result("fal-ai/flux-2/flash/edit", arguments)
+            return ResultProcessor.process_image_result(result)
+        except Exception as e:
+            return ApiHandler.handle_image_generation_error("Flux2FlashEdit", e)
+
+
+class Flux2TurboEdit:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "prompt": ("STRING", {"default": "", "multiline": "true"}),
+                "image": ("IMAGE",),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "edit_image"
+    CATEGORY = "FAL/Image"
+
+    def edit_image(
+        self,
+        prompt,
+        image,
+    ):
+        image_urls = ImageUtils.prepare_images(image)
+        if not image_urls:
+            return ApiHandler.handle_image_generation_error(
+                "Flux2TurboEdit", "No image provided."
+            )
+
+        arguments = {
+            "prompt": prompt,
+            "image_urls": image_urls,
+        }
+
+        try:
+            result = ApiHandler.submit_and_get_result("fal-ai/flux-2/turbo/edit", arguments)
+            return ResultProcessor.process_image_result(result)
+        except Exception as e:
+            return ApiHandler.handle_image_generation_error("Flux2TurboEdit", e)
+
+
 NODE_CLASS_MAPPINGS = {
+    "Flux2Edit_fal": Flux2Edit,
+    "Flux2FlashEdit_fal": Flux2FlashEdit,
+    "Flux2TurboEdit_fal": Flux2TurboEdit,
     "FluxKontextLora_fal": FluxKontextLora,
     "Ideogramv3_fal": Ideogramv3,
     "Hidreamfull_fal": HidreamFull,
@@ -2496,6 +2722,9 @@ NODE_CLASS_MAPPINGS = {
 
 # Display name mappings
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "Flux2Edit_fal": "Flux.2 Edit (fal)",
+    "Flux2FlashEdit_fal": "Flux.2 Flash Edit (fal)",
+    "Flux2TurboEdit_fal": "Flux.2 Turbo Edit (fal)",
     "FluxKontextLora_fal": "Flux Kontext Lora (fal)",
     "Ideogramv3_fal": "Ideogramv3 (fal)",
     "Hidreamfull_fal": "HidreamFull (fal)",
