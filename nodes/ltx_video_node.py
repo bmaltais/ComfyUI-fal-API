@@ -19,9 +19,12 @@ class LTXImageToVideo:
                         "portrait_16_9",
                         "landscape_4_3",
                         "landscape_16_9",
+                        "custom",
                     ],
                     {"default": "auto"},
                 ),
+                "width": ("INT", {"default": 1280, "min": 64, "max": 4096, "step": 8}),
+                "height": ("INT", {"default": 720, "min": 64, "max": 4096, "step": 8}),
                 "generate_audio": ("BOOLEAN", {"default": True}),
                 "use_multiscale": ("BOOLEAN", {"default": True}),
                 "fps": ("FLOAT", {"default": 25.0, "min": 1.0, "max": 60.0}),
@@ -82,6 +85,8 @@ class LTXImageToVideo:
         image,
         num_frames,
         video_size,
+        width,
+        height,
         generate_audio,
         use_multiscale,
         fps,
@@ -108,7 +113,6 @@ class LTXImageToVideo:
             "prompt": prompt,
             "image_url": image_url,
             "num_frames": num_frames,
-            "video_size": video_size,
             "generate_audio": generate_audio,
             "use_multiscale": use_multiscale,
             "fps": fps,
@@ -122,6 +126,11 @@ class LTXImageToVideo:
             "enable_prompt_expansion": enable_prompt_expansion,
             "enable_safety_checker": enable_safety_checker,
         }
+
+        if video_size == "custom":
+            arguments["video_size"] = {"width": width, "height": height}
+        else:
+            arguments["video_size"] = video_size
 
         if seed != -1:
             arguments["seed"] = seed
