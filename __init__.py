@@ -8,6 +8,7 @@ node_list = [
     "vlm_node",
     "trainer_node",
     "upscaler_node",
+    "ltx_video_node",
 ]
 
 NODE_CLASS_MAPPINGS = {}
