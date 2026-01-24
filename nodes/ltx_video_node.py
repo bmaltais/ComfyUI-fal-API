@@ -138,7 +138,7 @@ class LTXImageToVideo:
             return ApiHandler.handle_video_generation_error("LTXImageToVideo", e)
 
 
-NODE_CLASS_MAPPINGS = {"LTXImageToVideo_fal": LTXImageToVideo}
+NODE_CLASS_MAPPINGS = {"LTX2ImageToVideo_fal": LTXImageToVideo}
 
 
-NODE_DISPLAY_NAME_MAPPINGS = {"LTXImageToVideo_fal": "LTX Image to Video (fal)"}
+NODE_DISPLAY_NAME_MAPPINGS = {"LTX2ImageToVideo_fal": "LTX-2 Image to Video (fal)"}
