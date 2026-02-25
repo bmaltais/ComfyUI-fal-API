@@ -2684,10 +2684,166 @@ class Flux2TurboEdit:
             return ApiHandler.handle_image_generation_error("Flux2TurboEdit", e)
 
 
+class Flux2KleinEditLoRA:
+    @classmethod
+    def INPUT_TYPES(cls):
+        lora_names = ["None"] + folder_paths.get_filename_list("loras")
+        return {
+            "required": {
+                "prompt": ("STRING", {"default": "", "multiline": True}),
+                "image": ("IMAGE",),
+            },
+            "optional": {
+                "negative_prompt": ("STRING", {"default": "", "multiline": True}),
+                "guidance_scale": ("FLOAT", {"default": 5.0, "min": 0.0, "max": 20.0, "step": 0.1}),
+                "seed": ("INT", {"default": -1}),
+                "num_inference_steps": ("INT", {"default": 28, "min": 1, "max": 100}),
+                "image_size": (
+                    [
+                        "square_hd",
+                        "square",
+                        "portrait_4_3",
+                        "portrait_16_9",
+                        "landscape_4_3",
+                        "landscape_16_9",
+                        "custom",
+                    ],
+                    {"default": "square_hd"},
+                ),
+                "width": (
+                    "INT",
+                    {"default": 1024, "min": 512, "max": 2048, "step": 16},
+                ),
+                "height": (
+                    "INT",
+                    {"default": 1024, "min": 512, "max": 2048, "step": 16},
+                ),
+                "num_images": ("INT", {"default": 1, "min": 1, "max": 4}),
+                "acceleration": (["none", "regular", "high"], {"default": "regular"}),
+                "enable_safety_checker": ("BOOLEAN", {"default": True}),
+                "output_format": (["png", "jpeg", "webp"], {"default": "png"}),
+                "lora_1": (lora_names, {"default": "None"}),
+                "lora_1_strength": (
+                    "FLOAT",
+                    {"default": 1.0, "min": -1.0, "max": 2.0, "step": 0.05},
+                ),
+                "lora_1_path_or_url": ("STRING", {"default": ""}),
+                "lora_2": (lora_names, {"default": "None"}),
+                "lora_2_strength": (
+                    "FLOAT",
+                    {"default": 1.0, "min": -1.0, "max": 2.0, "step": 0.05},
+                ),
+                "lora_2_path_or_url": ("STRING", {"default": ""}),
+                "lora_3": (lora_names, {"default": "None"}),
+                "lora_3_strength": (
+                    "FLOAT",
+                    {"default": 1.0, "min": -1.0, "max": 2.0, "step": 0.05},
+                ),
+                "lora_3_path_or_url": ("STRING", {"default": ""}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "edit_image"
+    CATEGORY = "FAL/Image"
+
+    def edit_image(
+        self,
+        prompt,
+        image,
+        negative_prompt="",
+        guidance_scale=5.0,
+        seed=-1,
+        num_inference_steps=28,
+        image_size="square_hd",
+        width=1024,
+        height=1024,
+        num_images=1,
+        acceleration="regular",
+        enable_safety_checker=True,
+        output_format="png",
+        lora_1="None",
+        lora_1_strength=1.0,
+        lora_1_path_or_url="",
+        lora_2="None",
+        lora_2_strength=1.0,
+        lora_2_path_or_url="",
+        lora_3="None",
+        lora_3_strength=1.0,
+        lora_3_path_or_url="",
+    ):
+        image_urls = ImageUtils.prepare_images(image)
+        if not image_urls:
+            return ApiHandler.handle_image_generation_error(
+                "Flux2KleinEditLoRA", "No image provided."
+            )
+
+        arguments = {
+            "prompt": prompt,
+            "image_urls": image_urls,
+            "guidance_scale": guidance_scale,
+            "num_inference_steps": num_inference_steps,
+            "num_images": num_images,
+            "acceleration": acceleration,
+            "enable_safety_checker": enable_safety_checker,
+            "output_format": output_format,
+        }
+
+        # Add negative prompt if provided
+        if negative_prompt:
+            arguments["negative_prompt"] = negative_prompt
+
+        if image_size == "custom":
+            arguments["image_size"] = {"width": width, "height": height}
+        else:
+            arguments["image_size"] = image_size
+
+        if seed != -1:
+            arguments["seed"] = seed
+
+        # Add LoRAs (max 3 supported by API)
+        # Priority: URL input > dropdown selection
+        loras = []
+        
+        if lora_1_path_or_url:
+            loras.append({"path": lora_1_path_or_url, "scale": lora_1_strength})
+        elif lora_1 != "None":
+            lora_path = folder_paths.get_full_path("loras", lora_1)
+            lora_url = ImageUtils.upload_file(lora_path)
+            if lora_url:
+                loras.append({"path": lora_url, "scale": lora_1_strength})
+
+        if lora_2_path_or_url:
+            loras.append({"path": lora_2_path_or_url, "scale": lora_2_strength})
+        elif lora_2 != "None":
+            lora_path = folder_paths.get_full_path("loras", lora_2)
+            lora_url = ImageUtils.upload_file(lora_path)
+            if lora_url:
+                loras.append({"path": lora_url, "scale": lora_2_strength})
+
+        if lora_3_path_or_url:
+            loras.append({"path": lora_3_path_or_url, "scale": lora_3_strength})
+        elif lora_3 != "None":
+            lora_path = folder_paths.get_full_path("loras", lora_3)
+            lora_url = ImageUtils.upload_file(lora_path)
+            if lora_url:
+                loras.append({"path": lora_url, "scale": lora_3_strength})
+
+        if loras:
+            arguments["loras"] = loras
+
+        try:
+            result = ApiHandler.submit_and_get_result("fal-ai/flux-2/klein/9b/base/edit/lora", arguments)
+            return ResultProcessor.process_image_result(result)
+        except Exception as e:
+            return ApiHandler.handle_image_generation_error("Flux2KleinEditLoRA", e)
+
+
 NODE_CLASS_MAPPINGS = {
     "Flux2Edit_fal": Flux2Edit,
     "Flux2FlashEdit_fal": Flux2FlashEdit,
     "Flux2TurboEdit_fal": Flux2TurboEdit,
+    "Flux2KleinEditLoRA_fal": Flux2KleinEditLoRA,
     "FluxKontextLora_fal": FluxKontextLora,
     "Ideogramv3_fal": Ideogramv3,
     "Hidreamfull_fal": HidreamFull,
@@ -2725,6 +2881,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Flux2Edit_fal": "Flux.2 Edit (fal)",
     "Flux2FlashEdit_fal": "Flux.2 Flash Edit (fal)",
     "Flux2TurboEdit_fal": "Flux.2 Turbo Edit (fal)",
+    "Flux2KleinEditLoRA_fal": "Flux.2 Klein 9B Edit with LoRA (fal)",
     "FluxKontextLora_fal": "Flux Kontext Lora (fal)",
     "Ideogramv3_fal": "Ideogramv3 (fal)",
     "Hidreamfull_fal": "HidreamFull (fal)",

@@ -6,6 +6,7 @@ import asyncio
 import concurrent.futures
 import hashlib
 import json
+import logging
 
 import numpy as np
 import requests
@@ -13,6 +14,18 @@ import torch
 from fal_client.client import SyncClient
 from fal_client import AsyncClient
 from PIL import Image
+
+
+# Configure logging to suppress verbose HTTP request logging
+def _configure_logging():
+    """Suppress verbose logging from httpx, urllib3, and other libraries."""
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("fal_client").setLevel(logging.WARNING)
+
+
+_configure_logging()
 
 
 class FalConfig:
