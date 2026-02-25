@@ -171,3 +171,6 @@ memory-bank/
 .DS_Store
 .claude/
 Node-Docs/
+
+*.json
+config.ini
