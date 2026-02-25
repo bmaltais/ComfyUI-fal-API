@@ -28,6 +28,96 @@ def _configure_logging():
 _configure_logging()
 
 
+class FileUploadCache:
+    """
+    Manages file upload caching with SHA-256 hashing and JSON persistence.
+    
+    This class encapsulates the responsibilities of caching file uploads to FAL,
+    persisting the cache to disk, and retrieving cached URLs by file hash.
+    
+    Attributes:
+        _cache_file_path (str): Path to the JSON cache file.
+        _cache (dict): In-memory mapping of file hash -> upload URL.
+        _loaded (bool): Whether the cache has been loaded from disk.
+    
+    Example:
+        >>> cache = FileUploadCache()
+        >>> url = cache.get_cached_url(file_hash)
+        >>> cache.set_cached_url(file_hash, url)
+        >>> cache.save()
+    """
+
+    def __init__(self, cache_file_path: str | None = None) -> None:
+        """
+        Initialize the FileUploadCache.
+        
+        Args:
+            cache_file_path: Optional path to cache file. Defaults to
+                'upload_cache.json' in parent directory of this module.
+        """
+        if cache_file_path is None:
+            current_dir = os.path.dirname(os.path.realpath(__file__))
+            parent_dir = os.path.dirname(current_dir)
+            cache_file_path = os.path.join(parent_dir, "upload_cache.json")
+        
+        self._cache_file_path = cache_file_path
+        self._cache: dict[str, str] = {}
+        self._loaded = False
+
+    def load(self) -> None:
+        """Load cache from disk if not already loaded."""
+        if self._loaded:
+            return
+
+        if os.path.exists(self._cache_file_path):
+            try:
+                with open(self._cache_file_path, 'r') as f:
+                    self._cache = json.load(f)
+            except (IOError, json.JSONDecodeError):
+                self._cache = {}
+        else:
+            self._cache = {}
+
+        self._loaded = True
+
+    def save(self) -> None:
+        """Save cache to disk."""
+        try:
+            with open(self._cache_file_path, 'w') as f:
+                json.dump(self._cache, f, indent=4)
+        except IOError:
+            print("Warning: Could not write to upload cache file.")
+
+    def get(self, file_hash: str) -> str | None:
+        """
+        Retrieve a cached URL by file hash.
+        
+        Args:
+            file_hash: SHA-256 hash of the uploaded file.
+            
+        Returns:
+            The cached URL if found, None otherwise.
+        """
+        self.load()
+        return self._cache.get(file_hash)
+
+    def set(self, file_hash: str, url: str) -> None:
+        """
+        Cache a file URL by its hash and persist to disk.
+        
+        Args:
+            file_hash: SHA-256 hash of the file.
+            url: The FAL upload URL to cache.
+        """
+        self.load()
+        self._cache[file_hash] = url
+        self.save()
+
+    def __repr__(self) -> str:
+        """Return a string representation of the cache."""
+        return f"FileUploadCache(path={self._cache_file_path!r}, entries={len(self._cache)})"
+
+
 class FalConfig:
     """Singleton class to handle FAL configuration and client setup."""
 
@@ -84,31 +174,7 @@ class FalConfig:
 
 class ImageUtils:
     """Utility functions for image processing."""
-    _file_upload_cache = {}
-    _cache_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "upload_cache.json")
-    _cache_loaded = False
-
-    @staticmethod
-    def _load_cache():
-        if ImageUtils._cache_loaded:
-            return
-
-        if os.path.exists(ImageUtils._cache_file_path):
-            try:
-                with open(ImageUtils._cache_file_path, 'r') as f:
-                    ImageUtils._file_upload_cache = json.load(f)
-            except (IOError, json.JSONDecodeError):
-                ImageUtils._file_upload_cache = {}
-
-        ImageUtils._cache_loaded = True
-
-    @staticmethod
-    def _save_cache():
-        try:
-            with open(ImageUtils._cache_file_path, 'w') as f:
-                json.dump(ImageUtils._file_upload_cache, f, indent=4)
-        except IOError:
-            print("Warning: Could not write to upload cache file.")
+    _file_upload_cache = FileUploadCache()
 
     @staticmethod
     def tensor_to_pil(image):
@@ -167,20 +233,21 @@ class ImageUtils:
     @staticmethod
     def upload_file(file_path):
         """Upload a file to FAL and return URL, with caching."""
-        ImageUtils._load_cache()
-
         try:
             with open(file_path, "rb") as f:
                 file_hash = hashlib.sha256(f.read()).hexdigest()
 
-            if file_hash in ImageUtils._file_upload_cache:
-                return ImageUtils._file_upload_cache[file_hash]
+            # Check if file is already cached
+            cached_url = ImageUtils._file_upload_cache.get(file_hash)
+            if cached_url:
+                return cached_url
 
+            # Upload new file
             client = FalConfig().get_client()
             file_url = client.upload_file(file_path)
 
-            ImageUtils._file_upload_cache[file_hash] = file_url
-            ImageUtils._save_cache()
+            # Cache the new URL
+            ImageUtils._file_upload_cache.set(file_hash, file_url)
             return file_url
         except Exception as e:
             print(f"Error uploading file: {str(e)}")
