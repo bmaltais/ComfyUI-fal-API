@@ -2,11 +2,13 @@ import configparser
 import io
 import os
 import tempfile
+import zipfile
 import asyncio
 import concurrent.futures
 import hashlib
 import json
 import logging
+from typing import Callable, Any
 
 import numpy as np
 import requests
@@ -26,6 +28,101 @@ def _configure_logging():
 
 
 _configure_logging()
+
+
+class FalPayload:
+    """
+    Builder for FAL API payloads to reduce duplication in nodes.
+
+    This class provides a fluent interface for constructing the arguments
+    dictionary passed to FAL API endpoints, handling common patterns like
+    image/video sizes, seeds, and LoRAs.
+    """
+
+    def __init__(self, **kwargs) -> None:
+        """Initialize the payload with base arguments."""
+        self._arguments = kwargs
+
+    def set_image_size(self, image_size: str, width: int | None = None, height: int | None = None) -> "FalPayload":
+        """
+        Add image size to the payload.
+
+        Args:
+            image_size: Predefined size name or 'custom'.
+            width: Required if image_size is 'custom'.
+            height: Required if image_size is 'custom'.
+
+        Returns:
+            The FalPayload instance for chaining.
+        """
+        if image_size == "custom" and width and height:
+            self._arguments["image_size"] = {"width": width, "height": height}
+        else:
+            self._arguments["image_size"] = image_size
+        return self
+
+    def set_video_size(self, video_size: str, width: int | None = None, height: int | None = None) -> "FalPayload":
+        """
+        Add video size to the payload.
+
+        Args:
+            video_size: Predefined size name or 'custom'.
+            width: Required if video_size is 'custom'.
+            height: Required if video_size is 'custom'.
+
+        Returns:
+            The FalPayload instance for chaining.
+        """
+        if video_size == "custom" and width and height:
+            self._arguments["video_size"] = {"width": width, "height": height}
+        else:
+            self._arguments["video_size"] = video_size
+        return self
+
+    def set_seed(self, seed: int) -> "FalPayload":
+        """
+        Add seed to the payload if valid.
+
+        Args:
+            seed: The seed value. -1 indicates random seed (omitted).
+
+        Returns:
+            The FalPayload instance for chaining.
+        """
+        if seed != -1:
+            self._arguments["seed"] = seed
+        return self
+
+    def add_loras(self, loras_input: list[tuple[str, float]]) -> "FalPayload":
+        """
+        Add LoRAs to the payload.
+
+        Args:
+            loras_input: A list of (path_or_url, scale) tuples.
+
+        Returns:
+            The FalPayload instance for chaining.
+        """
+        loras = []
+        for path, scale in loras_input:
+            if path and path != "None":
+                loras.append({"path": path, "scale": scale})
+
+        if loras:
+            self._arguments["loras"] = loras
+        return self
+
+    def update(self, **kwargs) -> "FalPayload":
+        """Update arguments with multiple values."""
+        self._arguments.update(kwargs)
+        return self
+
+    def build(self) -> dict[str, Any]:
+        """Return the constructed arguments dictionary."""
+        return self._arguments
+
+    def __repr__(self) -> str:
+        return f"FalPayload(args={list(self._arguments.keys())})"
 
 
 class FileUploadCache:
@@ -268,25 +365,68 @@ class ImageUtils:
         """Preprocess images for use with FAL."""
         image_urls = []
         if images is not None:
-
-                if isinstance(images, torch.Tensor):
-                    if images.ndim == 4 and images.shape[0] > 1:
-                        for i in range(images.shape[0]):
-                            single_img = images[i:i+1]
-                            img_url = ImageUtils.upload_image(single_img)
-                            if img_url:
-                                image_urls.append(img_url)
-                    else:
-                        img_url = ImageUtils.upload_image(images)
+            if isinstance(images, torch.Tensor):
+                if images.ndim == 4 and images.shape[0] > 1:
+                    for i in range(images.shape[0]):
+                        single_img = images[i:i+1]
+                        img_url = ImageUtils.upload_image(single_img)
                         if img_url:
                             image_urls.append(img_url)
+                else:
+                    img_url = ImageUtils.upload_image(images)
+                    if img_url:
+                        image_urls.append(img_url)
 
-                elif isinstance(images, (list, tuple)):
-                    for img in images:
-                        img_url = ImageUtils.upload_image(img)
-                        if img_url:
-                            image_urls.append(img_url)
+            elif isinstance(images, (list, tuple)):
+                for img in images:
+                    img_url = ImageUtils.upload_image(img)
+                    if img_url:
+                        image_urls.append(img_url)
         return image_urls
+
+    @staticmethod
+    def create_images_zip(images):
+        """
+        Create a zip file from a list of images and upload it to FAL.
+
+        Args:
+            images: List or batch tensor of images.
+
+        Returns:
+            The URL of the uploaded zip file, or None on failure.
+        """
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip:
+                temp_zip_path = temp_zip.name
+
+            with zipfile.ZipFile(temp_zip_path, "w") as zf:
+                # Handle batch tensor
+                if isinstance(images, torch.Tensor) and images.ndim == 4:
+                    image_list = [images[i] for i in range(images.shape[0])]
+                elif isinstance(images, (list, tuple)):
+                    image_list = images
+                else:
+                    image_list = [images]
+
+                for idx, img_input in enumerate(image_list):
+                    pil_img = ImageUtils.tensor_to_pil(img_input)
+                    if not pil_img:
+                        continue
+
+                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_img:
+                        pil_img.save(temp_img, format="PNG")
+                        temp_img_path = temp_img.name
+
+                    zf.write(temp_img_path, f"image_{idx}.png")
+                    os.unlink(temp_img_path)
+
+            return ImageUtils.upload_file(temp_zip_path)
+        except Exception as e:
+            print(f"Error creating images zip: {str(e)}")
+            return None
+        finally:
+            if 'temp_zip_path' in locals() and os.path.exists(temp_zip_path):
+                os.unlink(temp_zip_path)
 
 
 class ResultProcessor:
@@ -343,22 +483,54 @@ class ResultProcessor:
         return (img_tensor,)
 
 
-class ApiHandler:
-    """Utility functions for API interactions."""
+class FalClient:
+    """
+    High-level client for interacting with FAL API.
 
-    @staticmethod
-    def submit_and_get_result(endpoint, arguments):
-        """Submit job to FAL API and get result."""
+    Encapsulates configuration, execution, and error handling.
+    """
+
+    def __init__(self, config: FalConfig | None = None) -> None:
+        """Initialize the client with optional configuration."""
+        self._config = config or FalConfig()
+
+    def execute(
+        self,
+        endpoint: str,
+        payload: FalPayload | dict[str, Any],
+        model_name: str,
+        processor: Callable[[Any], Any] | None = None,
+        error_handler: Callable[[str, Exception], Any] | None = None,
+    ) -> Any:
+        """
+        Execute a FAL API call with built-in error handling and processing.
+
+        Args:
+            endpoint: The FAL API endpoint (e.g., 'fal-ai/flux-pro').
+            payload: The arguments for the API call.
+            model_name: Friendly name of the model for error reporting.
+            processor: Optional function to process the API result.
+            error_handler: Optional function to handle exceptions.
+
+        Returns:
+            The processed result or the output of the error handler.
+        """
         try:
-            client = FalConfig().get_client()
+            arguments = payload.build() if isinstance(payload, FalPayload) else payload
+            client = self._config.get_client()
             handler = client.submit(endpoint, arguments=arguments)
-            return handler.get()
+            result = handler.get()
+
+            if processor:
+                return processor(result)
+            return result
         except Exception as e:
-            print(f"Error submitting to {endpoint}: {str(e)}")
+            if error_handler:
+                return error_handler(model_name, e)
+            print(f"Error executing {endpoint} ({model_name}): {str(e)}")
             raise e
 
-    @staticmethod
-    def submit_multiple_and_get_results(endpoint, arguments, variations):
+    def submit_multiple_and_get_results(self, endpoint, arguments, variations):
         """Submit multiple jobs concurrently to FAL API and get results."""
         try:
             # Run the async code in a thread to avoid event loop conflicts
@@ -407,3 +579,33 @@ class ApiHandler:
         """Handle text generation errors consistently."""
         print(f"Error generating text with {model_name}: {str(error)}")
         return ("Error: Unable to generate text.",)
+
+
+class ApiHandler:
+    """Legacy utility functions for API interactions, now using FalClient internally."""
+    _client = FalClient()
+
+    @staticmethod
+    def submit_and_get_result(endpoint, arguments):
+        """Submit job to FAL API and get result."""
+        return ApiHandler._client.execute(endpoint, arguments, endpoint)
+
+    @staticmethod
+    def submit_multiple_and_get_results(endpoint, arguments, variations):
+        """Submit multiple jobs concurrently to FAL API and get results."""
+        return ApiHandler._client.submit_multiple_and_get_results(endpoint, arguments, variations)
+
+    @staticmethod
+    def handle_video_generation_error(model_name, error):
+        """Handle video generation errors consistently."""
+        return FalClient.handle_video_generation_error(model_name, error)
+
+    @staticmethod
+    def handle_image_generation_error(model_name, error):
+        """Handle image generation errors consistently."""
+        return FalClient.handle_image_generation_error(model_name, error)
+
+    @staticmethod
+    def handle_text_generation_error(model_name, error):
+        """Handle text generation errors consistently."""
+        return FalClient.handle_text_generation_error(model_name, error)

@@ -1,6 +1,6 @@
 from .flux2klein_base_edit_node import Flux2KleinBaseEdit
 import folder_paths
-from .fal_utils import ApiHandler, ImageUtils, ResultProcessor
+from .fal_utils import ApiHandler, FalClient, FalPayload, ImageUtils, ResultProcessor
 
 
 # Remove all the configuration code since it's now handled by FalConfig
@@ -68,29 +68,27 @@ class Sana:
         enable_safety_checker=True,
         output_format="png",
     ):
-        arguments = {
-            "prompt": prompt,
-            "negative_prompt": negative_prompt,
-            "num_inference_steps": num_inference_steps,
-            "guidance_scale": guidance_scale,
-            "num_images": num_images,
-            "enable_safety_checker": enable_safety_checker,
-            "output_format": output_format,
-        }
+        payload = (
+            FalPayload(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                num_inference_steps=num_inference_steps,
+                guidance_scale=guidance_scale,
+                num_images=num_images,
+                enable_safety_checker=enable_safety_checker,
+                output_format=output_format,
+            )
+            .set_image_size(image_size, width, height)
+            .set_seed(seed)
+        )
 
-        if image_size == "custom":
-            arguments["image_size"] = {"width": width, "height": height}
-        else:
-            arguments["image_size"] = image_size
-
-        if seed != -1:
-            arguments["seed"] = seed
-
-        try:
-            result = ApiHandler.submit_and_get_result("fal-ai/sana", arguments)
-            return ResultProcessor.process_image_result(result)
-        except Exception as e:
-            return ApiHandler.handle_image_generation_error("Sana", e)
+        return FalClient().execute(
+            endpoint="fal-ai/sana",
+            payload=payload,
+            model_name="Sana",
+            processor=ResultProcessor.process_image_result,
+            error_handler=FalClient.handle_image_generation_error,
+        )
 
 
 class Recraft:
@@ -804,34 +802,26 @@ class FluxLora:
         lora_path_2="",
         lora_scale_2=1.0,
     ):
-        arguments = {
-            "prompt": prompt,
-            "num_inference_steps": num_inference_steps,
-            "guidance_scale": guidance_scale,
-            "num_images": num_images,
-            "enable_safety_checker": enable_safety_checker,
-        }
-        if image_size == "custom":
-            arguments["image_size"] = {"width": width, "height": height}
-        else:
-            arguments["image_size"] = image_size
-        if seed != -1:
-            arguments["seed"] = seed
+        payload = (
+            FalPayload(
+                prompt=prompt,
+                num_inference_steps=num_inference_steps,
+                guidance_scale=guidance_scale,
+                num_images=num_images,
+                enable_safety_checker=enable_safety_checker,
+            )
+            .set_image_size(image_size, width, height)
+            .set_seed(seed)
+            .add_loras([(lora_path_1, lora_scale_1), (lora_path_2, lora_scale_2)])
+        )
 
-        # Add LoRAs
-        loras = []
-        if lora_path_1:
-            loras.append({"path": lora_path_1, "scale": lora_scale_1})
-        if lora_path_2:
-            loras.append({"path": lora_path_2, "scale": lora_scale_2})
-        if loras:
-            arguments["loras"] = loras
-
-        try:
-            result = ApiHandler.submit_and_get_result("fal-ai/flux-lora", arguments)
-            return ResultProcessor.process_image_result(result)
-        except Exception as e:
-            return ApiHandler.handle_image_generation_error("FluxLora", e)
+        return FalClient().execute(
+            endpoint="fal-ai/flux-lora",
+            payload=payload,
+            model_name="FluxLora",
+            processor=ResultProcessor.process_image_result,
+            error_handler=FalClient.handle_image_generation_error,
+        )
 
 
 class FluxGeneral:

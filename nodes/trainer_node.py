@@ -1,51 +1,11 @@
 import os
-import tempfile
-import zipfile
 
 import torch
-from PIL import Image
 
-from .fal_utils import ApiHandler, FalConfig
+from .fal_utils import ApiHandler, FalConfig, ImageUtils
 
 # Initialize FalConfig
 fal_config = FalConfig()
-
-
-def create_zip_from_images(images):
-    """Create a zip file from a list of images."""
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip:
-            with zipfile.ZipFile(temp_zip, "w") as zf:
-                for idx, img_tensor in enumerate(images):
-                    # Convert tensor to PIL Image
-                    if isinstance(img_tensor, torch.Tensor):
-                        # Convert to numpy and scale to 0-255 range
-                        img_np = (img_tensor.cpu().numpy() * 255).astype("uint8")
-                        # Handle different tensor formats
-                        if img_np.shape[0] == 3:  # If in format (C, H, W)
-                            img_np = img_np.transpose(1, 2, 0)
-                        img = Image.fromarray(img_np)
-                    else:
-                        img = img_tensor
-
-                    # Save image to temporary file
-                    with tempfile.NamedTemporaryFile(
-                        suffix=".png", delete=False
-                    ) as temp_img:
-                        img.save(temp_img, format="PNG")
-                        temp_img_path = temp_img.name
-
-                    # Add to zip file
-                    zf.write(temp_img_path, f"image_{idx}.png")
-                    os.unlink(temp_img_path)
-
-            # Use fal_client.upload_file instead of ApiHandler.upload_file
-            client = FalConfig().get_client()
-            return client.upload_file(temp_zip.name)
-    except Exception as e:
-        return ApiHandler.handle_text_generation_error(
-            "flux-lora-fast-training", f"Failed to create zip file: {str(e)}"
-        )
 
 
 class FluxLoraTrainerNode:
@@ -88,7 +48,7 @@ class FluxLoraTrainerNode:
         try:
             # Use provided zip URL if available, otherwise create and upload zip file
             images_url = (
-                images_zip_url if images_zip_url else create_zip_from_images(images)
+                images_zip_url if images_zip_url else ImageUtils.create_images_zip(images)
             )
             if not images_url:
                 return ApiHandler.handle_text_generation_error(
@@ -164,7 +124,7 @@ class HunyuanVideoLoraTrainerNode:
         try:
             # Use provided zip URL if available, otherwise create and upload zip file
             images_url = (
-                images_zip_url if images_zip_url else create_zip_from_images(images)
+                images_zip_url if images_zip_url else ImageUtils.create_images_zip(images)
             )
             if not images_url:
                 return ApiHandler.handle_text_generation_error(

@@ -1,5 +1,5 @@
 import folder_paths
-from .fal_utils import ApiHandler, ImageUtils
+from .fal_utils import FalClient, FalPayload, ImageUtils
 
 
 class LTXImageToVideo:
@@ -105,46 +105,44 @@ class LTXImageToVideo:
     ):
         image_url = ImageUtils.upload_image(image)
         if not image_url:
-            return ApiHandler.handle_video_generation_error(
+            return FalClient.handle_video_generation_error(
                 "LTXImageToVideo", "Failed to upload image"
             )
 
-        arguments = {
-            "prompt": prompt,
-            "image_url": image_url,
-            "num_frames": num_frames,
-            "generate_audio": generate_audio,
-            "use_multiscale": use_multiscale,
-            "fps": fps,
-            "acceleration": acceleration,
-            "camera_lora": camera_lora,
-            "camera_lora_scale": camera_lora_scale,
-            "negative_prompt": negative_prompt,
-            "video_output_type": video_output_type,
-            "video_quality": video_quality,
-            "video_write_mode": video_write_mode,
-            "enable_prompt_expansion": enable_prompt_expansion,
-            "enable_safety_checker": enable_safety_checker,
-        }
-
-        if video_size == "custom":
-            arguments["video_size"] = {"width": width, "height": height}
-        else:
-            arguments["video_size"] = video_size
-
-        if seed != -1:
-            arguments["seed"] = seed
+        payload = (
+            FalPayload(
+                prompt=prompt,
+                image_url=image_url,
+                num_frames=num_frames,
+                generate_audio=generate_audio,
+                use_multiscale=use_multiscale,
+                fps=fps,
+                acceleration=acceleration,
+                camera_lora=camera_lora,
+                camera_lora_scale=camera_lora_scale,
+                negative_prompt=negative_prompt,
+                video_output_type=video_output_type,
+                video_quality=video_quality,
+                video_write_mode=video_write_mode,
+                enable_prompt_expansion=enable_prompt_expansion,
+                enable_safety_checker=enable_safety_checker,
+            )
+            .set_video_size(video_size, width, height)
+            .set_seed(seed)
+        )
 
         endpoint = "fal-ai/ltx-2-19b/distilled/image-to-video"
         if lora_path:
             endpoint += "/lora"
-            arguments["loras"] = [{"path": lora_path, "scale": lora_scale}]
+            payload.add_loras([(lora_path, lora_scale)])
 
-        try:
-            result = ApiHandler.submit_and_get_result(endpoint, arguments)
-            return (result["video"]["url"],)
-        except Exception as e:
-            return ApiHandler.handle_video_generation_error("LTXImageToVideo", e)
+        return FalClient().execute(
+            endpoint=endpoint,
+            payload=payload,
+            model_name="LTXImageToVideo",
+            processor=lambda res: (res["video"]["url"],),
+            error_handler=FalClient.handle_video_generation_error,
+        )
 
 
 NODE_CLASS_MAPPINGS = {"LTX2ImageToVideo_fal": LTXImageToVideo}
