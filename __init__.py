@@ -1,3 +1,8 @@
+"""
+ComfyUI-fal-API package initialization.
+
+This module dynamically imports node modules and aggregates their class mappings.
+"""
 import importlib
 import importlib.util
 
