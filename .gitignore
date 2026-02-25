@@ -173,4 +173,5 @@ memory-bank/
 Node-Docs/
 
 *.json
+# Ignore local configuration
 config.ini

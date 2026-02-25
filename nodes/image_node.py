@@ -1,3 +1,4 @@
+from .flux2klein_base_edit_node import Flux2KleinBaseEdit
 import folder_paths
 from .fal_utils import ApiHandler, ImageUtils, ResultProcessor
 
@@ -2694,6 +2695,9 @@ class Flux2KleinEditLoRA:
                 "image": ("IMAGE",),
             },
             "optional": {
+                "image2": ("IMAGE",),
+                "image3": ("IMAGE",),
+                "image4": ("IMAGE",),
                 "negative_prompt": ("STRING", {"default": "", "multiline": True}),
                 "guidance_scale": ("FLOAT", {"default": 5.0, "min": 0.0, "max": 20.0, "step": 0.1}),
                 "seed": ("INT", {"default": -1}),
@@ -2747,10 +2751,14 @@ class Flux2KleinEditLoRA:
     FUNCTION = "edit_image"
     CATEGORY = "FAL/Image"
 
+
     def edit_image(
         self,
         prompt,
         image,
+        image2=None,
+        image3=None,
+        image4=None,
         negative_prompt="",
         guidance_scale=5.0,
         seed=-1,
@@ -2772,7 +2780,9 @@ class Flux2KleinEditLoRA:
         lora_3_strength=1.0,
         lora_3_path_or_url="",
     ):
-        image_urls = ImageUtils.prepare_images(image)
+        # Collect all provided images
+        images = [img for img in (image, image2, image3, image4) if img is not None]
+        image_urls = ImageUtils.prepare_images(images) if images else []
         if not image_urls:
             return ApiHandler.handle_image_generation_error(
                 "Flux2KleinEditLoRA", "No image provided."
@@ -2844,6 +2854,7 @@ NODE_CLASS_MAPPINGS = {
     "Flux2FlashEdit_fal": Flux2FlashEdit,
     "Flux2TurboEdit_fal": Flux2TurboEdit,
     "Flux2KleinEditLoRA_fal": Flux2KleinEditLoRA,
+    "Flux2KleinBaseEdit_fal": Flux2KleinBaseEdit,
     "FluxKontextLora_fal": FluxKontextLora,
     "Ideogramv3_fal": Ideogramv3,
     "Hidreamfull_fal": HidreamFull,
@@ -2882,6 +2893,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Flux2FlashEdit_fal": "Flux.2 Flash Edit (fal)",
     "Flux2TurboEdit_fal": "Flux.2 Turbo Edit (fal)",
     "Flux2KleinEditLoRA_fal": "Flux.2 Klein 9B Edit with LoRA (fal)",
+    "Flux2KleinBaseEdit_fal": "Flux.2 Klein 9B Base Edit (fal)",
     "FluxKontextLora_fal": "Flux Kontext Lora (fal)",
     "Ideogramv3_fal": "Ideogramv3 (fal)",
     "Hidreamfull_fal": "HidreamFull (fal)",
